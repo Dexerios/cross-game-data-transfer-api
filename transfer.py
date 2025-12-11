@@ -30,7 +30,7 @@ def roblox_read(universe, datastore, entry_key):
     r = requests.get(url, headers=headers, params=params)
 
     if r.status_code == 404:
-        return None  # no data exists
+        return None
 
     r.raise_for_status()
     return r.json()
@@ -63,19 +63,14 @@ def migrate():
     if not entry_key:
         return jsonify({"error": "Missing entryKey"}), 400
 
-    # 1. Read old datastore
     old_data = roblox_read(OLD_UNIVERSE, OLD_DATASTORE, entry_key)
 
     if old_data is None:
         return jsonify({"success": False, "reason": "No old data found"})
 
-    # 2. Write into new datastore
     try:
         roblox_write(NEW_UNIVERSE, NEW_DATASTORE, entry_key, old_data)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
     return jsonify({"success": True, "migrated": old_data})
-
-
-
