@@ -76,11 +76,11 @@ def upload():
             print("UPLOAD ERROR: missing fields")
             return jsonify({"error": "entryKey and data required"}), 400
 
-        # NEW — store data in memory for Dungeon to retrieve
+        # Store in memory for Dungeon to retrieve
         TRANSFER_CACHE[entry_key] = data
         print(f"Cached data for {entry_key}: {TRANSFER_CACHE[entry_key]}")
 
-        # Existing — write to Roblox datastore
+        # Write to Roblox Datastore
         roblox_write(NEW_UNIVERSE, NEW_DATASTORE, entry_key, data)
 
         return jsonify({"success": True}), 200
@@ -91,7 +91,7 @@ def upload():
 
 
 # ---------------------------------------
-# NEW: RETRIEVE route — Dungeon calls this
+# RETRIEVE route — Dungeon calls this
 # ---------------------------------------
 @app.route("/retrieve", methods=["GET"])
 def retrieve():
@@ -111,6 +111,44 @@ def retrieve():
 
     except Exception as e:
         print("RETRIEVE ERROR:", e)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------
+# DEBUG: View ALL cached payloads
+# ---------------------------------------
+@app.route("/debug-cache", methods=["GET"])
+def debug_cache():
+    try:
+        return jsonify({
+            "success": True,
+            "stored_keys": list(TRANSFER_CACHE.keys()),
+            "cache": TRANSFER_CACHE
+        }), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------------------------------------
+# DEBUG: View a specific cached entry
+# ---------------------------------------
+@app.route("/debug-key", methods=["GET"])
+def debug_key():
+    try:
+        entry_key = request.args.get("entryKey")
+
+        if not entry_key:
+            return jsonify({"error": "Missing entryKey"}), 400
+
+        if entry_key not in TRANSFER_CACHE:
+            return jsonify({"error": "No data found"}), 404
+
+        return jsonify({
+            "success": True,
+            "data": TRANSFER_CACHE[entry_key]
+        }), 200
+
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 
