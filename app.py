@@ -4,186 +4,95 @@ import logging
 import requests
 from flask import Flask, request, jsonify
 
-# Enable full debug logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
-# -------------------------------
-# TEMPORARY IN-MEMORY DATA STORE
-# -------------------------------
-TRANSFER_CACHE = {}
+# ===============================
+# CONFIG
+# ===============================
 
-# ---------------------------------------
-# Load Roblox API Key from Railway env vars
-# ---------------------------------------
-API_KEY = "n69gqEZwK0ey6Jmr8YrOva+F1axHoUxS1E1NDn392yyfsmMVZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTnBaeTB5TURJeExUQTNMVEV6VkRFNE9qVXhPalE1V2lJc0luUjVjQ0k2SWtwWFZDSjkuZXlKaGRXUWlPaUpTYjJKc2IzaEpiblJsY201aGJDSXNJbWx6Y3lJNklrTnNiM1ZrUVhWMGFHVnVkR2xqWVhScGIyNVRaWEoyYVdObElpd2lZbUZ6WlVGd2FVdGxlU0k2SW00Mk9XZHhSVnAzU3pCbGVUWktiWEk0V1hKUGRtRXJSakZoZUVodlZYaFRNVVV4VGtSdU16a3llWGxtYzIxTlZpSXNJbTkzYm1WeVNXUWlPaUl4TURFNU1EQXlNQ0lzSW1WNGNDSTZNVGMyTlRNMU16TTFNQ3dpYVdGMElqb3hOelkxTXpRNU56VXdMQ0p1WW1ZaU9qRTNOalV6TkRrM05UQjkuZmJ3M3lmWUVYNEtzdlhxUnVkR2l3ZjlDUENFNE5wMUM1T3hRejd2cTF2OHFlRVAtcG1rczFIb0RuNFpHV0pFQTFFUXlsMzFHUlRST3hZS0I5WEY2ZXdDSGVOU3BhYkgxUFVhUTk4SzJPaXZ1Uzg3ZjF1Z1VvR3JrV2E4YVJuRnRoQk9aNUsySHlDQXBBWHhKelpWdjIxME5jaWxfdmtCaFM5elhxbkJiWTlHdjVTWDRjZ2hPSVNsTkhfV2d0SlY1bTRhNkc2N21HNnRYbWRTcHgyWlU2VHVpLXczYjg4QnFjNEdLbG1LQ0RjbkZGTjExY0Z3SWpoTW5EMnVld2Fad200elZocE92UFAyaURISllvSUpkQkoxTlR0X2xrTGpuQlM1QUVQbG91b25yLXFKc0QxZmMxU0JJRTNnTFZtaUFoWjFjaHpsZ2NpazVlYll2RHhyZ3FR"
-print("Loaded API KEY:", API_KEY)
-
-OLD_UNIVERSE = 60375311
-OLD_DATASTORE = "TransferTest"
-
+API_KEY = os.getenv("ROBLOX_API_KEY")  # REQUIRED
 NEW_UNIVERSE = 3727159513
 NEW_DATASTORE = "TestStore"
 
-# ---------------------------------------
-# Helper: Write to Roblox Datastore
-# ---------------------------------------
-def roblox_write(universe, datastore, entry_key, data):
-    url = f"https://apis.roblox.com/datastores/v1/universes/{universe}/standard-datastores/datastore/entries/entry"
+if not API_KEY:
+    raise RuntimeError("ROBLOX_API_KEY not set")
+
+# ===============================
+# Roblox Datastore Write
+# ===============================
+
+def write_to_datastore(entry_key, data):
+    url = (
+        f"https://apis.roblox.com/datastores/v1/universes/"
+        f"{NEW_UNIVERSE}/standard-datastores/datastore/entries/entry"
+    )
 
     headers = {
         "x-api-key": API_KEY,
+        "Content-Type": "application/json",
         "Accept": "application/json",
-        "Content-Type": "application/json"
     }
 
     params = {
-        "datastoreName": datastore,
+        "datastoreName": NEW_DATASTORE,
         "scope": "global",
-        "entryKey": entry_key
+        "entryKey": entry_key,
     }
 
-    print("Writing to Roblox DS:", universe, datastore, entry_key, data)
-    response = requests.post(url, headers=headers, params=params, data=json.dumps(data))
-    print("Roblox API Response:", response.status_code, response.text)
+    response = requests.post(
+        url,
+        headers=headers,
+        params=params,
+        data=json.dumps(data),
+        timeout=10,
+    )
 
     response.raise_for_status()
-    return True
 
+# ===============================
+# Health Check
+# ===============================
 
-# ---------------------------------------
-# Health check
-# ---------------------------------------
-@app.route("/")
-def home():
-    return "API is running", 200
+@app.route("/", methods=["GET"])
+def health():
+    return "OK", 200
 
+# ===============================
+# RECEIVE DATA FROM OLD GAME
+# ===============================
 
-# ---------------------------------------
-# UPLOAD route — store incoming data AND write to DS
-# ---------------------------------------
 @app.route("/upload", methods=["POST"])
 def upload():
     try:
         payload = request.get_json(force=True)
-        print("Received Payload:", payload)
 
         entry_key = payload.get("entryKey")
         data = payload.get("data")
 
         if not entry_key or data is None:
-            print("UPLOAD ERROR: missing fields")
-            return jsonify({"error": "entryKey and data required"}), 400
+            return jsonify({
+                "success": False,
+                "error": "entryKey and data are required"
+            }), 400
 
-        # Store in memory for Dungeon to retrieve
-        TRANSFER_CACHE[entry_key] = data
-        print(f"Cached data for {entry_key}: {TRANSFER_CACHE[entry_key]}")
-
-        # Write to Roblox Datastore
-        roblox_write(NEW_UNIVERSE, NEW_DATASTORE, entry_key, data)
-
-        return jsonify({"success": True}), 200
-
-    except Exception as e:
-        print("UPLOAD ERROR:", e)
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-# ---------------------------------------
-# RETRIEVE route — Dungeon calls this
-# ---------------------------------------
-@app.route("/retrieve", methods=["GET"])
-def retrieve():
-    try:
-        entry_key = request.args.get("entryKey")
-
-        if not entry_key:
-            return jsonify({"error": "Missing entryKey"}), 400
-
-        if entry_key not in TRANSFER_CACHE:
-            return jsonify({"success": False, "reason": "No cached data"}), 404
+        write_to_datastore(entry_key, data)
 
         return jsonify({
             "success": True,
-            "data": TRANSFER_CACHE[entry_key]
+            "writtenKey": entry_key
         }), 200
 
-    except Exception as e:
-        print("RETRIEVE ERROR:", e)
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-# ---------------------------------------
-# DEBUG: View ALL cached payloads
-# ---------------------------------------
-@app.route("/debug-cache", methods=["GET"])
-def debug_cache():
-    try:
+    except requests.HTTPError as e:
         return jsonify({
-            "success": True,
-            "stored_keys": list(TRANSFER_CACHE.keys()),
-            "cache": TRANSFER_CACHE
-        }), 200
+            "success": False,
+            "error": "Roblox API error",
+            "details": str(e)
+        }), 502
+
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-# ---------------------------------------
-# DEBUG: View a specific cached entry
-# ---------------------------------------
-@app.route("/debug-key", methods=["GET"])
-def debug_key():
-    try:
-        entry_key = request.args.get("entryKey")
-
-        if not entry_key:
-            return jsonify({"error": "Missing entryKey"}), 400
-
-        if entry_key not in TRANSFER_CACHE:
-            return jsonify({"error": "No data found"}), 404
-
         return jsonify({
-            "success": True,
-            "data": TRANSFER_CACHE[entry_key]
-        }), 200
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-# ---------------------------------------
-# Optional: migrate old → new datastore
-# ---------------------------------------
-@app.route("/migrate")
-def migrate():
-    try:
-        entry_key = request.args.get("entryKey")
-        if not entry_key:
-            return jsonify({"error": "Missing entryKey"}), 400
-
-        url = f"https://apis.roblox.com/datastores/v1/universes/{OLD_UNIVERSE}/standard-datastores/datastore/entries/entry"
-        headers = {"x-api-key": API_KEY, "Accept": "application/json"}
-        params = {
-            "datastoreName": OLD_DATASTORE,
-            "scope": "global",
-            "entryKey": entry_key
-        }
-
-        print("Reading from OLD DS:", entry_key)
-        r = requests.get(url, headers=headers, params=params)
-        print("Old DS Response:", r.status_code, r.text)
-
-        if r.status_code == 404:
-            return jsonify({"success": False, "reason": "No old data found"}), 404
-
-        r.raise_for_status()
-        old_data = r.json()
-
-        roblox_write(NEW_UNIVERSE, NEW_DATASTORE, entry_key, old_data)
-
-        return jsonify({"success": True, "migrated": old_data}), 200
-
-    except Exception as e:
-        print("MIGRATE ERROR:", e)
-        return jsonify({"success": False, "error": str(e)}), 500
+            "success": False,
+            "error": str(e)
+        }), 500
