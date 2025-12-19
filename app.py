@@ -4,7 +4,7 @@ import logging
 import requests
 from flask import Flask, request, jsonify
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 
@@ -95,6 +95,7 @@ def upload():
             "success": False,
             "error": str(e)
         }), 500
+
 
 
 
