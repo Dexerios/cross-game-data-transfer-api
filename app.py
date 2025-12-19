@@ -10,7 +10,7 @@ app = Flask(__name__)
 
 # ===============================
 # CONFIG
-# ===============================
+# ==============================
 
 API_KEY = os.getenv("ROBLOX_API_KEY")  # REQUIRED
 NEW_UNIVERSE = 3064619271
@@ -96,4 +96,5 @@ def upload():
             "success": False,
             "error": str(e)
         }), 500
+
 
